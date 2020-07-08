@@ -27,8 +27,8 @@ struct Bytes<T: BytesSerde>(T);
 
 #[derive(Serialize, Deserialize)]
 enum SavedCipher {
-    Encryption(SavedRawCipher, raw::CipherPadding),
-    Decryption(SavedRawCipher, raw::CipherPadding),
+    Encryption(SavedRawCipher, raw::CipherPadding, Vec<u8>),
+    Decryption(SavedRawCipher, raw::CipherPadding, Vec<u8>),
 }
 
 // Custom serialization in serde.rs to force encoding as sequence.
@@ -46,12 +46,15 @@ enum AlgorithmContext {
     Aes(Bytes<aes_context>),
     Des(Bytes<des_context>),
     Des3(Bytes<des3_context>),
+    Gcm {
+        context: Bytes<gcm_context>,
+        inner_cipher_ctx: Box<SavedRawCipher>
+    }
 }
 
-// Serialization support for cipher structs. We only support serialization for traditional (not
-// AEAD) ciphers, and only in the "data" state.
+// Serialization support for cipher structs. We only support serialization in the "data" state.
 
-impl<Op: Operation> Serialize for Cipher<Op, Traditional, CipherData> {
+impl<Op: Operation, T: Type> Serialize for Cipher<Op, T, CipherData> {
     fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -87,6 +90,35 @@ impl<Op: Operation> Serialize for Cipher<Op, Traditional, CipherData> {
                 | (CIPHER_ID_3DES, MODE_CFB) => AlgorithmContext::Des3(Bytes(
                     *(cipher_context.cipher_ctx as *const des3_context),
                 )),
+                (CIPHER_ID_AES, MODE_GCM) => {
+                    let gcm_context = *(cipher_context.cipher_ctx as *const gcm_context);
+
+                    let mut inner_ctx = gcm_context.cipher_ctx;
+
+                    let inner_ctx_cipher_id = (*(*inner_ctx.cipher_info).base).cipher;
+                    let inner_ctx_cipher_mode = (*inner_ctx.cipher_info).mode;
+                    let inner_ctx_key_bit_len = (*inner_ctx.cipher_info).key_bitlen;
+
+                    let mut inner_aes_context = *(inner_ctx.cipher_ctx as *const aes_context);
+                    inner_aes_context.rk = ::core::ptr::null_mut();
+
+                    inner_ctx.cipher_ctx = ::core::ptr::null_mut();
+                    inner_ctx.add_padding = None;
+                    inner_ctx.get_padding = None;
+
+                    let inner_cipher_ctx = SavedRawCipher {
+                        cipher_id: inner_ctx_cipher_id,
+                        cipher_mode: inner_ctx_cipher_mode,
+                        key_bit_len: inner_ctx_key_bit_len,
+                        context: Bytes(inner_ctx),
+                        algorithm_ctx: AlgorithmContext::Aes(Bytes(inner_aes_context)),
+                    };
+
+                    AlgorithmContext::Gcm {
+                        context: Bytes(*(cipher_context.cipher_ctx as *const gcm_context)),
+                        inner_cipher_ctx: Box::new(inner_cipher_ctx)
+                    }
+                },
                 _ => {
                     return Err(ser::Error::custom(
                         "unsupported algorithm for serialization",
@@ -111,20 +143,20 @@ impl<Op: Operation> Serialize for Cipher<Op, Traditional, CipherData> {
         };
 
         match Op::is_encrypt() {
-            true => SavedCipher::Encryption(saved_raw_cipher, self.padding).serialize(s),
-            false => SavedCipher::Decryption(saved_raw_cipher, self.padding).serialize(s),
+            true => SavedCipher::Encryption(saved_raw_cipher, self.padding, self.remaining_gcm_in_data.clone()).serialize(s),
+            false => SavedCipher::Decryption(saved_raw_cipher, self.padding, self.remaining_gcm_in_data.clone()).serialize(s),
         }
     }
 }
 
-impl<'de, Op: Operation> Deserialize<'de> for Cipher<Op, Traditional, CipherData> {
-    fn deserialize<D>(d: D) -> Result<Cipher<Op, Traditional, CipherData>, D::Error>
+impl<'de, Op: Operation, T: Type> Deserialize<'de> for Cipher<Op, T, CipherData> {
+    fn deserialize<D>(d: D) -> Result<Cipher<Op, T, CipherData>, D::Error>
     where
         D: Deserializer<'de>,
     {
         let saved_cipher: SavedCipher = SavedCipher::deserialize(d)?;
 
-        let (raw, padding) = match saved_cipher {
+        let (raw, padding, remaining_gcm_in_data) = match saved_cipher {
             SavedCipher::Encryption(..) if !Op::is_encrypt() => {
                 return Err(de::Error::invalid_value(
                     Unexpected::Other("incorrect cipher operation"),
@@ -137,8 +169,10 @@ impl<'de, Op: Operation> Deserialize<'de> for Cipher<Op, Traditional, CipherData
                     &"decryption",
                 ));
             }
-            SavedCipher::Encryption(raw, padding) | SavedCipher::Decryption(raw, padding) => {
-                (raw, padding)
+            SavedCipher::Encryption(raw, padding, remaining_gcm_in_data)
+            | SavedCipher::Decryption(raw, padding, remaining_gcm_in_data)
+            => {
+                (raw, padding, remaining_gcm_in_data)
             }
         };
 
@@ -183,6 +217,43 @@ impl<'de, Op: Operation> Deserialize<'de> for Cipher<Op, Traditional, CipherData
                 (CIPHER_ID_3DES, AlgorithmContext::Des3(Bytes(des3_ctx))) => {
                     *(cipher_context.cipher_ctx as *mut des3_context) = des3_ctx
                 }
+                (CIPHER_ID_AES, AlgorithmContext::Gcm {
+                    context,
+                    inner_cipher_ctx
+                }) => {
+                    let ret_gcm_context = cipher_context.cipher_ctx as *mut gcm_context;
+                    *ret_gcm_context = context.0;
+
+                    let gcm_inner_cipher_ctx = &mut (*ret_gcm_context).cipher_ctx;
+                    cipher_init(gcm_inner_cipher_ctx);
+                    cipher_setup(
+                        gcm_inner_cipher_ctx,
+                        cipher_info_from_values(inner_cipher_ctx.cipher_id,
+                                                inner_cipher_ctx.key_bit_len as i32,
+                                                inner_cipher_ctx.cipher_mode)
+                    );
+
+                    match inner_cipher_ctx.algorithm_ctx {
+                        AlgorithmContext::Aes(Bytes(aes_inner_context)) => {
+                            let ret_inner_aes_ctx = ((*ret_gcm_context).cipher_ctx).cipher_ctx as *mut aes_context;
+                            *ret_inner_aes_ctx = aes_inner_context;
+                            (*ret_inner_aes_ctx).rk = &mut (*ret_inner_aes_ctx).buf[0];
+                        },
+                        _ => {
+                            return Err(de::Error::invalid_value(
+                                Unexpected::Other("bad algorithm"),
+                                &"valid algorithm",
+                            ));
+                        }
+                    }
+
+                    gcm_inner_cipher_ctx.key_bitlen = inner_cipher_ctx.context.0.key_bitlen;
+                    gcm_inner_cipher_ctx.operation = inner_cipher_ctx.context.0.operation;
+                    gcm_inner_cipher_ctx.unprocessed_data = inner_cipher_ctx.context.0.unprocessed_data;
+                    gcm_inner_cipher_ctx.unprocessed_len = inner_cipher_ctx.context.0.unprocessed_len;
+                    gcm_inner_cipher_ctx.iv = inner_cipher_ctx.context.0.iv;
+                    gcm_inner_cipher_ctx.iv_size = inner_cipher_ctx.context.0.iv_size;
+                }
                 _ => {
                     return Err(de::Error::invalid_value(
                         Unexpected::Other("bad algorithm"),
@@ -202,6 +273,7 @@ impl<'de, Op: Operation> Deserialize<'de> for Cipher<Op, Traditional, CipherData
         Ok(Cipher {
             raw_cipher: raw_cipher,
             padding: padding,
+            remaining_gcm_in_data,
             _op: PhantomData,
             _type: PhantomData,
             _state: PhantomData,
@@ -294,6 +366,7 @@ unsafe impl BytesSerde for cipher_context_t {}
 unsafe impl BytesSerde for aes_context {}
 unsafe impl BytesSerde for des_context {}
 unsafe impl BytesSerde for des3_context {}
+unsafe impl BytesSerde for gcm_context {}
 
 // If the C API changes, the serde implementation needs to be reviewed for correctness.
 

@@ -520,6 +520,7 @@ static const mbedtls_cipher_info_t aes_256_xts_info = {
 static int gcm_aes_setkey_wrap( void *ctx, const unsigned char *key,
                                 unsigned int key_bitlen )
 {
+
     return mbedtls_gcm_setkey( (mbedtls_gcm_context *) ctx, MBEDTLS_CIPHER_ID_AES,
                      key, key_bitlen );
 }

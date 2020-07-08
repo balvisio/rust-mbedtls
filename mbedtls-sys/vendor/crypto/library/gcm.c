@@ -111,6 +111,7 @@ static int gcm_gen_table( mbedtls_gcm_context *ctx )
     unsigned char h[16];
     size_t olen = 0;
 
+
     memset( h, 0, 16 );
     if( ( ret = mbedtls_cipher_update( &ctx->cipher_ctx, h, 16, h, &olen ) ) != 0 )
         return( ret );
@@ -160,6 +161,10 @@ static int gcm_gen_table( mbedtls_gcm_context *ctx )
         }
     }
 
+        if (ctx->cipher_ctx.cipher_info->type == 3 ){
+    printf("#### IN GCM GEN TABLE SUCCESS ######\n");
+        fflush(stdout);
+    }
     return( 0 );
 }
 
@@ -170,7 +175,10 @@ int mbedtls_gcm_setkey( mbedtls_gcm_context *ctx,
 {
     int ret;
     const mbedtls_cipher_info_t *cipher_info;
-
+     if (keybits == 192 ){
+       printf("IN gcm setkey\n");
+        fflush(stdout);
+       }
     GCM_VALIDATE_RET( ctx != NULL );
     GCM_VALIDATE_RET( key != NULL );
     GCM_VALIDATE_RET( keybits == 128 || keybits == 192 || keybits == 256 );
@@ -183,10 +191,27 @@ int mbedtls_gcm_setkey( mbedtls_gcm_context *ctx,
     if( cipher_info->block_size != 16 )
         return( MBEDTLS_ERR_GCM_BAD_INPUT );
 
+     if (keybits == 192 ){
+        printf("In mbedtls_gcm_setkey before freeing cipher_ctx: %p\n", &ctx->cipher_ctx);
+        fflush(stdout);
+    }
+
     mbedtls_cipher_free( &ctx->cipher_ctx );
 
+     if (keybits == 192 ){
+         printf("In mbedtls_gcm_setkey after freeing cipher_ctx: %p\n", &ctx->cipher_ctx);
+        fflush(stdout);
+    }
     if( ( ret = mbedtls_cipher_setup( &ctx->cipher_ctx, cipher_info ) ) != 0 )
         return( ret );
+
+     if (keybits == 192 ){
+         printf("In mbedtls_gcm_setkey after setup cipher_ctx: %p\n", &ctx->cipher_ctx);
+                 printf("Mode of inner cipher_ctx: %d\n",  ctx->cipher_ctx.cipher_info->mode);
+                                  printf("Type of inner cipher_ctx: %d\n",  ctx->cipher_ctx.cipher_info->type);
+
+         fflush(stdout);
+     }
 
     if( ( ret = mbedtls_cipher_setkey( &ctx->cipher_ctx, key, keybits,
                                MBEDTLS_ENCRYPT ) ) != 0 )
@@ -197,6 +222,10 @@ int mbedtls_gcm_setkey( mbedtls_gcm_context *ctx,
     if( ( ret = gcm_gen_table( ctx ) ) != 0 )
         return( ret );
 
+        if (ctx->cipher_ctx.cipher_info->type == 3 ){
+    printf("#### IN GCM SET KEY SUCCESS ######\n");
+        fflush(stdout);
+    }
     return( 0 );
 }
 
@@ -357,6 +386,11 @@ int mbedtls_gcm_starts( mbedtls_gcm_context *ctx,
         p += use_len;
     }
 
+
+ if (ctx->cipher_ctx.cipher_info->type == 3 ){
+    printf("######## IN GCM STARTS SUCCESS  #######\n");
+    fflush(stdout);
+    }
     return( 0 );
 }
 
@@ -372,13 +406,55 @@ int mbedtls_gcm_update( mbedtls_gcm_context *ctx,
     unsigned char *out_p = output;
     size_t use_len, olen = 0;
 
-    GCM_VALIDATE_RET( ctx != NULL );
-    GCM_VALIDATE_RET( length == 0 || input != NULL );
-    GCM_VALIDATE_RET( length == 0 || output != NULL );
+    if (&ctx->cipher_ctx == NULL) {
+       printf("gcm update cipher_ctx is null\n");
+       fflush(stdout);
+       }
 
+
+    if (ctx->cipher_ctx.cipher_info == NULL) {
+       printf("gcm update cipher_ctx.cipher_info is null\n");
+       fflush(stdout);
+       }
+
+
+    if (ctx->cipher_ctx.key_bitlen == 77 ){
+    printf("IN GCM UPDATE key bit len 77\n");
+    fflush(stdout);
+    }
+ //   printf("IN GCM UPDATE 0.5\n");
+
+    GCM_VALIDATE_RET( ctx != NULL );
+    if (ctx->cipher_ctx.cipher_info->type == 3 ){
+    printf("IN GCM UPDATE 2\n");
+    fflush(stdout);
+    }
+   // printf("IN GCM UPDATE 0.7\n");
+   //     fflush(stdout);
+
+
+    GCM_VALIDATE_RET( length == 0 || input != NULL );
+    if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("IN GCM UPDATE 3\n");
+            fflush(stdout);
+
+    }
+    // printf("IN GCM UPDATE 0.9\n");
+    //    fflush(stdout);
+
+    GCM_VALIDATE_RET( length == 0 || output != NULL );
+    if (ctx->cipher_ctx.cipher_info->type == 3 ){
+    printf("IN GCM UPDATE 4\n");
+        fflush(stdout);
+
+    }
     if( output > input && (size_t) ( output - input ) < length )
         return( MBEDTLS_ERR_GCM_BAD_INPUT );
 
+    if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("IN GCM UPDATE 5\n");
+        fflush(stdout);
+    }
     /* Total length is restricted to 2^39 - 256 bits, ie 2^36 - 2^5 bytes
      * Also check for possible overflow */
     if( ctx->len + length < ctx->len ||
@@ -386,9 +462,17 @@ int mbedtls_gcm_update( mbedtls_gcm_context *ctx,
     {
         return( MBEDTLS_ERR_GCM_BAD_INPUT );
     }
+    if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("IN GCM UPDATE 6\n");
+        fflush(stdout);
 
+    }
     ctx->len += length;
+    if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("IN GCM UPDATE 7\n");
+        fflush(stdout);
 
+    }
     p = input;
     while( length > 0 )
     {
@@ -397,13 +481,20 @@ int mbedtls_gcm_update( mbedtls_gcm_context *ctx,
         for( i = 16; i > 12; i-- )
             if( ++ctx->y[i - 1] != 0 )
                 break;
+                if (ctx->cipher_ctx.cipher_info->type == 3 ){
+                    printf("IN GCM UPDATE 7.5\n");
+                    fflush(stdout);
 
+                }
         if( ( ret = mbedtls_cipher_update( &ctx->cipher_ctx, ctx->y, 16, ectr,
                                    &olen ) ) != 0 )
         {
             return( ret );
         }
-
+        if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("IN GCM UPDATE 7.6\n");
+            fflush(stdout);
+        }
         for( i = 0; i < use_len; i++ )
         {
             if( ctx->mode == MBEDTLS_GCM_DECRYPT )
@@ -412,14 +503,28 @@ int mbedtls_gcm_update( mbedtls_gcm_context *ctx,
             if( ctx->mode == MBEDTLS_GCM_ENCRYPT )
                 ctx->buf[i] ^= out_p[i];
         }
-
+        if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("IN GCM UPDATE 7.7\n");
+            fflush(stdout);
+        }
         gcm_mult( ctx, ctx->buf, ctx->buf );
-
+        if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("IN GCM UPDATE 7.8\n");
+            fflush(stdout);
+        }
         length -= use_len;
         p += use_len;
         out_p += use_len;
     }
+    if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("IN GCM UPDATE 8\n");
+        fflush(stdout);
+    }
 
+        if (ctx->cipher_ctx.cipher_info->type == 3 ){
+        printf("#### IN GCM UPDATE SUCCESS ######\n");
+            fflush(stdout);
+        }
     return( 0 );
 }
 
@@ -460,6 +565,10 @@ int mbedtls_gcm_finish( mbedtls_gcm_context *ctx,
         for( i = 0; i < tag_len; i++ )
             tag[i] ^= ctx->buf[i];
     }
+        if (ctx->cipher_ctx.cipher_info->type == 3 ){
+    printf("#### IN GCM FINISH SUCCESS ######\n");
+       fflush(stdout);
+    }
 
     return( 0 );
 }
@@ -493,6 +602,7 @@ int mbedtls_gcm_crypt_and_tag( mbedtls_gcm_context *ctx,
 
     if( ( ret = mbedtls_gcm_finish( ctx, tag, tag_len ) ) != 0 )
         return( ret );
+
 
     return( 0 );
 }

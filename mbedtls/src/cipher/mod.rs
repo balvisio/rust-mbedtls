@@ -89,6 +89,9 @@ pub struct Cipher<O: Operation, T: Type, S: State = Fresh> {
 
     // mbedtls only stores the padding as function pointers, so we remember this here
     padding: raw::CipherPadding,
+
+    // For GCM mode stores the remaining bytes that were not updated in the previous 'update' invocation
+    remaining_gcm_in_data: Vec<u8>,
     _op: PhantomData<O>,
     _type: PhantomData<T>,
     _state: PhantomData<S>,
@@ -103,6 +106,7 @@ impl<O: Operation, T: Type, S: State> Cipher<O, T, S> {
         Cipher {
             raw_cipher: self.raw_cipher,
             padding: self.padding,
+            remaining_gcm_in_data: self.remaining_gcm_in_data,
             _op: PhantomData,
             _type: PhantomData,
             _state: PhantomData,
@@ -124,6 +128,10 @@ impl<O: Operation, T: Type, S: State> Cipher<O, T, S> {
             None
         }
     }
+
+    fn cipher_mode(&self) -> raw::CipherMode {
+        self.raw_cipher.cipher_mode()
+    }
 }
 
 impl<O: Operation, T: Type> Cipher<O, T, Fresh> {
@@ -141,6 +149,7 @@ impl<O: Operation, T: Type> Cipher<O, T, Fresh> {
         Ok(Cipher {
             raw_cipher: raw_cipher,
             padding: raw::CipherPadding::Pkcs7,
+            remaining_gcm_in_data: vec![],
             _op: PhantomData,
             _type: PhantomData,
             _state: PhantomData,
@@ -207,6 +216,20 @@ impl<O: Operation> Cipher<O, Authenticated, Fresh> {
         iv: &[u8],
     ) -> Result<Cipher<O, Authenticated, AdditionalData>> {
         self.set_key_and_maybe_iv(key, Some(iv))?;
+
+        // Put together the structure to return
+        Ok(self.change_state())
+    }
+}
+
+impl<O: Operation> Cipher<O, Authenticated, AdditionalData> {
+    pub fn set_ad(
+        mut self,
+        ad: &[u8]
+    ) -> Result<Cipher<O, Authenticated, CipherData>> {
+
+        // For AEAD add AD
+        self.raw_cipher.update_ad(ad)?;
 
         // Put together the structure to return
         Ok(self.change_state())
@@ -291,18 +314,53 @@ impl<O: Operation, T: Type> Cipher<O, T, CipherData> {
         out_data: &mut [u8],
     ) -> Result<(usize, Cipher<O, T, CipherData>)> {
         // Call the wrapper function to do update operation (multi part)
-        let len = self.raw_cipher.update(in_data, out_data)?;
+        // GCM mode requires updates to be multiple of block size (except in last call)
+        let len = if self.cipher_mode() == raw::CipherMode::GCM {
+            self.remaining_gcm_in_data.append(&mut in_data.to_owned());
+            let block_size = self.raw_cipher.block_size();
+            let blocks = self.remaining_gcm_in_data.len() / block_size;
+            let len = self.raw_cipher.update(&self.remaining_gcm_in_data[0..blocks * block_size], out_data)?;
+            self.remaining_gcm_in_data = self.remaining_gcm_in_data.split_off(blocks * block_size);
+            len
+        } else {
+            self.raw_cipher.update(in_data, out_data)?
+        };
 
         // Put together the structure to return
         Ok((len, self.change_state()))
     }
+}
 
-    pub fn finish(mut self, out_data: &mut [u8]) -> Result<(usize, Cipher<O, T, Finished>)> {
+impl<O: Operation> Cipher<O, Traditional, CipherData> {
+    pub fn finish(mut self, out_data: &mut [u8]) -> Result<(usize, Cipher<O, Traditional, Finished>)> {
         // Call the wrapper function to finish operation (multi part)
         let len = self.raw_cipher.finish(out_data)?;
 
         // Put together the structure to return
         Ok((len, self.change_state()))
+    }
+}
+
+impl<O: Operation> Cipher<O, Authenticated, CipherData> {
+    pub fn finish(mut self, out_data: &mut [u8], out_tag: Option<&mut [u8]>) -> Result<(usize, Cipher<O, Authenticated, CipherData>)> {
+
+        // GCM mode requires updates to be multiple of block size (except in last call)
+        // We make a last call to update with remaining data
+        let mut total_len = 0;
+        if self.cipher_mode() == raw::CipherMode::GCM {
+            total_len += self.raw_cipher.update(&self.remaining_gcm_in_data[0..self.remaining_gcm_in_data.len()], out_data)?;
+            self.remaining_gcm_in_data.clear();
+        }
+
+        // Call the wrapper function to finish operation (multi part)
+        total_len += self.raw_cipher.finish(&mut out_data[total_len..])?;
+
+        if out_tag.is_some() {
+            self.raw_cipher.write_tag(out_tag.unwrap())?;
+        }
+
+        // Put together the structure to return
+        Ok((total_len, self.change_state()))
     }
 }
 

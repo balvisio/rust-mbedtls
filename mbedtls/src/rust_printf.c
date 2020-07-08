@@ -32,6 +32,6 @@ extern int mbedtls_printf(const char *fmt, ...) {
        return -1;
 
     mbedtls_log(p);
-
+    fflush(stdout);
     return n;
 }

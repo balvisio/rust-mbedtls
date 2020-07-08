@@ -479,10 +479,18 @@ int mbedtls_cipher_setup_psa( mbedtls_cipher_context_t *ctx,
 static inline unsigned int mbedtls_cipher_get_block_size(
     const mbedtls_cipher_context_t *ctx )
 {
+    if (ctx->cipher_info->type == 15 ){
+    printf("in mbedtls_cipher_get_block_size 1 \n");
+    }
     MBEDTLS_INTERNAL_VALIDATE_RET( ctx != NULL, 0 );
+    if (ctx->cipher_info->type == 15 ){
+    printf("in mbedtls_cipher_get_block_size 1.5 \n");
+    }
     if( ctx->cipher_info == NULL )
         return 0;
-
+    if (ctx->cipher_info->type == 15 ){
+    printf("in mbedtls_cipher_get_block_size 2 \n");
+    }
     return ctx->cipher_info->block_size;
 }
 

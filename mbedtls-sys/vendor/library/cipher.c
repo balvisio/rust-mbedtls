@@ -218,6 +218,7 @@ void mbedtls_cipher_free( mbedtls_cipher_context_t *ctx )
 int mbedtls_cipher_setup( mbedtls_cipher_context_t *ctx,
                           const mbedtls_cipher_info_t *cipher_info )
 {
+    printf("Heiph setuib\n");
     CIPHER_VALIDATE_RET( ctx != NULL );
     if( cipher_info == NULL )
         return( MBEDTLS_ERR_CIPHER_BAD_INPUT_DATA );
@@ -514,7 +515,7 @@ int mbedtls_cipher_update( mbedtls_cipher_context_t *ctx, const unsigned char *i
 {
     int ret;
     size_t block_size;
-
+    printf("in mbedtlsipher update");
     CIPHER_VALIDATE_RET( ctx != NULL );
     CIPHER_VALIDATE_RET( ilen == 0 || input != NULL );
     CIPHER_VALIDATE_RET( output != NULL );
@@ -555,6 +556,7 @@ int mbedtls_cipher_update( mbedtls_cipher_context_t *ctx, const unsigned char *i
     if( ctx->cipher_info->mode == MBEDTLS_MODE_GCM )
     {
         *olen = ilen;
+            printf("in mbedtls cihe update gcm\n");
         return( mbedtls_gcm_update( (mbedtls_gcm_context *) ctx->cipher_ctx, ilen, input,
                                     output ) );
     }

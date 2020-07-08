@@ -239,7 +239,22 @@ int mbedtls_cipher_setup( mbedtls_cipher_context_t *ctx,
     (void) mbedtls_cipher_set_padding_mode( ctx, MBEDTLS_PADDING_NONE );
 #endif
 #endif /* MBEDTLS_CIPHER_MODE_WITH_PADDING */
+      if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 6 || ctx->cipher_info->type == 3){
+        printf("Cipher setup end\n");
+        printf("==========================\n");
+        printf("SETUP CIPHER CONTEXT T\n");
+        printf("ctx->key_bitlen: %d\n", ctx->cipher_info->key_bitlen);
+        printf("ctx->cipher_info->mode: %d\n", ctx->cipher_info->mode);
+        printf("ctx->cipher_info->type: %d\n", ctx->cipher_info->type);
+        printf("ctx->cipher_ctx: %p \n", &(ctx->cipher_ctx));
+        printf("Address of ctx: %p\n", ctx);
+        if (ctx->cipher_info->type == 15) {
+        printf("Address of gcm cipher_ctx: %p\n", &(((mbedtls_gcm_context*) ctx->cipher_ctx)->cipher_ctx));
+        }
 
+        printf("==========================\n");
+            fflush(stdout);
+       }
     return( 0 );
 }
 
@@ -280,6 +295,10 @@ int mbedtls_cipher_setkey( mbedtls_cipher_context_t *ctx,
                            int key_bitlen,
                            const mbedtls_operation_t operation )
 {
+if (key_bitlen == 192 ){
+       printf("IN start mbedtls_cipher_setkey\n");
+        fflush(stdout);
+       }
     CIPHER_VALIDATE_RET( ctx != NULL );
     CIPHER_VALIDATE_RET( key != NULL );
     CIPHER_VALIDATE_RET( operation == MBEDTLS_ENCRYPT ||
@@ -378,6 +397,11 @@ int mbedtls_cipher_setkey( mbedtls_cipher_context_t *ctx,
         return( ctx->cipher_info->base->setkey_dec_func( ctx->cipher_ctx, key,
                                                          ctx->key_bitlen ) );
 
+                                                         if (key_bitlen == 192 ){
+                                                                printf("IN end mbedtls_cipher_setkey\n");
+                                                                 fflush(stdout);
+                                                                }
+
     return( MBEDTLS_ERR_CIPHER_BAD_INPUT_DATA );
 }
 
@@ -386,7 +410,10 @@ int mbedtls_cipher_set_iv( mbedtls_cipher_context_t *ctx,
                            size_t iv_len )
 {
     size_t actual_iv_size;
-
+if (ctx->key_bitlen == 192 ){
+       printf("IN start mbedtls_cipher_set_iv\n");
+        fflush(stdout);
+       }
     CIPHER_VALIDATE_RET( ctx != NULL );
     CIPHER_VALIDATE_RET( iv_len == 0 || iv != NULL );
     if( ctx->cipher_info == NULL )
@@ -504,7 +531,10 @@ int mbedtls_cipher_update_ad( mbedtls_cipher_context_t *ctx,
                                                ad, ad_len ) );
     }
 #endif
-
+if (ctx->key_bitlen == 192 ){
+       printf("###### IN end mbedtls_cipher_set_iv. SUCCESS ############\n");
+        fflush(stdout);
+       }
     return( 0 );
 }
 #endif /* MBEDTLS_GCM_C || MBEDTLS_CHACHAPOLY_C */
@@ -512,16 +542,57 @@ int mbedtls_cipher_update_ad( mbedtls_cipher_context_t *ctx,
 int mbedtls_cipher_update( mbedtls_cipher_context_t *ctx, const unsigned char *input,
                    size_t ilen, unsigned char *output, size_t *olen )
 {
+
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 6 || ctx->cipher_info->type == 3) {
+
+    printf("in mbedtls cipher update 1\n");
+    printf("==========================\n");
+    printf("UPDATE CIPHER CONTEXT T\n");
+    printf("ctx->key_bitlen: %u\n", ctx->cipher_info->key_bitlen);
+    printf("ctx->cipher_info->mode: %d\n", ctx->cipher_info->mode);
+    printf("ctx->cipher_info->type: %d\n", ctx->cipher_info->type);
+    printf("ctx->cipher_ctx: %p \n", &(ctx->cipher_ctx));
+    printf("Address of ctx: %p\n", ctx);
+    if(ctx->cipher_info->type == 15) {
+        printf("Address of gcm cipher_ctx: %p\n", &(((mbedtls_gcm_context*) ctx->cipher_ctx)->cipher_ctx));
+    }
+    printf("==========================\n");
+        fflush(stdout);
+ //   fflush(1);
+  //  fflush(stderr);
+    printf("After flush\n");
+
+
+}
     int ret;
     size_t block_size;
 
     CIPHER_VALIDATE_RET( ctx != NULL );
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 2\n");
+    fflush(stdout);
+
+    }
     CIPHER_VALIDATE_RET( ilen == 0 || input != NULL );
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 3\n");
+        fflush(stderr);
+    }
     CIPHER_VALIDATE_RET( output != NULL );
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 4\n");
+        fflush(stdout);
+
+    }
     CIPHER_VALIDATE_RET( olen != NULL );
     if( ctx->cipher_info == NULL )
         return( MBEDTLS_ERR_CIPHER_BAD_INPUT_DATA );
 
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 5\n");
+        fflush(stdout);
+
+    }
 #if defined(MBEDTLS_USE_PSA_CRYPTO)
     if( ctx->psa_enabled == 1 )
     {
@@ -531,30 +602,65 @@ int mbedtls_cipher_update( mbedtls_cipher_context_t *ctx, const unsigned char *i
         return( MBEDTLS_ERR_CIPHER_FEATURE_UNAVAILABLE );
     }
 #endif /* MBEDTLS_USE_PSA_CRYPTO */
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 6\n");
+        fflush(stdout);
 
+    }
     *olen = 0;
-    block_size = mbedtls_cipher_get_block_size( ctx );
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 6.4\n");
+        fflush(stdout);
 
+    }
+    block_size = mbedtls_cipher_get_block_size( ctx );
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 6.5\n");
+        fflush(stdout);
+
+    }
     if( ctx->cipher_info->mode == MBEDTLS_MODE_ECB )
     {
+        if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+        printf("in mbedtls cipher update 6.6\n");
+            fflush(stdout);
+        }
         if( ilen != block_size )
             return( MBEDTLS_ERR_CIPHER_FULL_BLOCK_EXPECTED );
 
         *olen = ilen;
-
+        if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+        printf("in mbedtls cipher update 6.7\n");
+            fflush(stdout);
+        }
         if( 0 != ( ret = ctx->cipher_info->base->ecb_func( ctx->cipher_ctx,
                     ctx->operation, input, output ) ) )
         {
+            if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+            printf("#### UPDATE ECB in mbedtls cipher update 6. SUCCESS ########8\n");
+                fflush(stdout);
+            }
             return( ret );
         }
-
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 6.9\n");
+        fflush(stdout);
+    }
         return( 0 );
+    }
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 7\n");
+        fflush(stdout);
     }
 
 #if defined(MBEDTLS_GCM_C)
     if( ctx->cipher_info->mode == MBEDTLS_MODE_GCM )
     {
         *olen = ilen;
+        if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+        printf("before gcm update\n");
+            fflush(stdout);
+        }
         return( mbedtls_gcm_update( (mbedtls_gcm_context *) ctx->cipher_ctx, ilen, input,
                                     output ) );
     }
@@ -568,18 +674,27 @@ int mbedtls_cipher_update( mbedtls_cipher_context_t *ctx, const unsigned char *i
                                            ilen, input, output ) );
     }
 #endif
-
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 8\n");
+        fflush(stdout);
+    }
     if ( 0 == block_size )
     {
         return( MBEDTLS_ERR_CIPHER_INVALID_CONTEXT );
     }
-
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 9\n");
+        fflush(stdout);
+    }
     if( input == output &&
        ( ctx->unprocessed_len != 0 || ilen % block_size ) )
     {
         return( MBEDTLS_ERR_CIPHER_BAD_INPUT_DATA );
     }
-
+    if (ctx->cipher_info->type == 15 || ctx->cipher_info->type == 3 ){
+    printf("in mbedtls cipher update 10\n");
+        fflush(stdout);
+    }
 #if defined(MBEDTLS_CIPHER_MODE_CBC)
     if( ctx->cipher_info->mode == MBEDTLS_MODE_CBC )
     {
@@ -960,6 +1075,8 @@ int mbedtls_cipher_finish( mbedtls_cipher_context_t *ctx,
         MBEDTLS_MODE_XTS == ctx->cipher_info->mode ||
         MBEDTLS_MODE_STREAM == ctx->cipher_info->mode )
     {
+
+
         return( 0 );
     }
 
