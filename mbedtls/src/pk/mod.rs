@@ -1089,6 +1089,135 @@ iy6KC991zzvaWY/Ys+q/84Afqa+0qJKQnPuy/7F5GkVdQA/lfbhi
     }
 
     #[test]
+    fn encrypt_raw_decrypt_with_pkcs1_v15() {
+        let mut pk = Pk::from_private_key(TEST_DER, None).unwrap();
+        let mut cipher = [0u8; 2048 / 8];
+        let mut rng = crate::test_support::rand::test_rng();
+        pk.set_options(Options::Rsa {
+            padding: RsaPadding::Pkcs1V15
+        });
+        assert_eq!(
+            pk.encrypt(b"test", &mut cipher, &mut rng)
+                .unwrap(),
+            cipher.len()
+        );
+        let mut decrypted_data1 = [0u8; 2048 / 8];
+        let length_without_padding = pk.decrypt(&cipher, &mut decrypted_data1, &mut rng).unwrap();
+        // set raw decryption padding mode to perform raw decryption
+        pk.set_options(Options::Rsa {
+            padding: RsaPadding::None
+        });
+        let mut decrypted_data2 = [0u8; 2048 / 8];
+        let length_with_padding = pk.decrypt(&cipher, &mut decrypted_data2, &mut rng).unwrap();
+        // compare lengths of the decrypted texts
+        assert_ne!(length_without_padding, length_with_padding);
+        assert_ne!(&decrypted_data1[..], &decrypted_data2[..]);
+    }
+
+    #[test]
+    fn encrypt_raw_decrypt_with_pkcs1_v21() {
+        let mut pk = Pk::from_private_key(TEST_DER, None).unwrap();
+        let mut cipher = [0u8; 2048 / 8];
+        let mut rng = crate::test_support::rand::test_rng();
+        pk.set_options(Options::Rsa {
+            padding: RsaPadding::Pkcs1V21 {
+                mgf: Type::Sha256,
+            },
+        });
+        assert_eq!(
+            pk.encrypt(b"test", &mut cipher, &mut rng)
+                .unwrap(),
+            cipher.len()
+        );
+        let mut decrypted_data1 = [0u8; 2048 / 8];
+        let length_without_padding = pk.decrypt(&cipher, &mut decrypted_data1, &mut rng).unwrap();
+        // set raw decryption padding mode to perform raw decryption
+        pk.set_options(Options::Rsa {
+            padding: RsaPadding::None
+        });
+        let mut decrypted_data2 = [0u8; 2048 / 8];
+        let length_with_padding = pk.decrypt(&cipher, &mut decrypted_data2, &mut rng).unwrap();
+        // compare lengths of the decrypted texts
+        assert_ne!(length_without_padding, length_with_padding);
+        assert_ne!(&decrypted_data1[..], &decrypted_data2[..]);
+    }
+
+    #[test]
+    fn rsa_encrypt_with_no_padding() {
+        let mut pk = Pk::from_private_key(TEST_DER, None).unwrap();
+        let mut cipher = [0u8; 2048 / 8];
+        pk.set_options(Options::Rsa {
+            padding: RsaPadding::None
+        });
+        assert!(pk.encrypt(b"test", &mut cipher, &mut crate::test_support::rand::test_rng()).is_err());
+    }
+
+    #[test]
+    fn rsa_sign_with_none_padding() {
+        let mut pk =
+            Pk::generate_rsa(&mut crate::test_support::rand::test_rng(), 2048, 0x10001).unwrap();
+        let data = b"SIGNATURE TEST SIGNATURE TEST SI";
+        let mut signature = vec![0u8; (pk.len() + 7) / 8];
+
+        let digests = [
+            Type::Md2,
+            Type::Md4,
+            Type::Md5,
+            Type::Sha1,
+            Type::Sha224,
+            Type::Sha256,
+            Type::Sha384,
+            Type::Sha512,
+            Type::Ripemd,
+        ];
+
+        for digest in &digests {
+            pk.set_options(Options::Rsa {
+                padding: RsaPadding::None,
+            });
+            assert!(pk.sign(*digest, data, &mut signature, &mut crate::test_support::rand::test_rng()).is_err());
+        }
+    }
+
+    #[test]
+    fn rsa_verify_with_none_padding() {
+        let mut pk =
+            Pk::generate_rsa(&mut crate::test_support::rand::test_rng(), 2048, 0x10001).unwrap();
+        let data = b"SIGNATURE TEST SIGNATURE TEST SI";
+        let mut signature = vec![0u8; (pk.len() + 7) / 8];
+
+        let digests = [
+            Type::Md2,
+            Type::Md4,
+            Type::Md5,
+            Type::Sha1,
+            Type::Sha224,
+            Type::Sha256,
+            Type::Sha384,
+            Type::Sha512,
+            Type::Ripemd,
+        ];
+
+        for digest in &digests {
+            pk.set_options(Options::Rsa {
+                padding: RsaPadding::Pkcs1V21 { mgf: *digest },
+            });
+            let len = pk
+                .sign(
+                    *digest,
+                    data,
+                    &mut signature,
+                    &mut crate::test_support::rand::test_rng(),
+                )
+                .unwrap();
+            pk.set_options(Options::Rsa {
+                padding: RsaPadding::None,
+            });
+            assert!(pk.verify(*digest, data, &signature[0..len]).is_err());
+        }
+    }
+
+    #[test]
     fn custom_pk_obj() {
         let pk = Pk::public_custom_algo(&[8, 0, 2], &[1, 2, 3, 4]).unwrap();
         assert_eq!(pk.pk_type(), PkType::Custom);
