@@ -331,6 +331,13 @@ impl<O: Operation> Cipher<O, Authenticated, Finished> {
         // Put together the structure to return
         Ok(self.change_state())
     }
+
+    pub fn check_tag(mut self, tag: &[u8]) -> Result<Cipher<O, Authenticated, Finished>> {
+        self.raw_cipher.check_tag(tag)?;
+
+        // Put together the structure to return
+        Ok(self.change_state())
+    }
 }
 
 #[test]
