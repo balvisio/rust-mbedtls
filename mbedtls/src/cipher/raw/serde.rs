@@ -27,8 +27,8 @@ struct Bytes<T: BytesSerde>(T);
 
 #[derive(Serialize, Deserialize)]
 enum SavedCipher {
-    Encryption(SavedRawCipher, raw::CipherPadding, Vec<u8>),
-    Decryption(SavedRawCipher, raw::CipherPadding, Vec<u8>),
+    Encryption(SavedRawCipher, raw::CipherPadding),
+    Decryption(SavedRawCipher, raw::CipherPadding),
 }
 
 // Custom serialization in serde.rs to force encoding as sequence.
@@ -143,8 +143,8 @@ impl<Op: Operation, T: Type> Serialize for Cipher<Op, T, CipherData> {
         };
 
         match Op::is_encrypt() {
-            true => SavedCipher::Encryption(saved_raw_cipher, self.padding, self.remaining_gcm_in_data.clone()).serialize(s),
-            false => SavedCipher::Decryption(saved_raw_cipher, self.padding, self.remaining_gcm_in_data.clone()).serialize(s),
+            true => SavedCipher::Encryption(saved_raw_cipher, self.padding).serialize(s),
+            false => SavedCipher::Decryption(saved_raw_cipher, self.padding).serialize(s),
         }
     }
 }
@@ -156,7 +156,7 @@ impl<'de, Op: Operation, T: Type> Deserialize<'de> for Cipher<Op, T, CipherData>
     {
         let saved_cipher: SavedCipher = SavedCipher::deserialize(d)?;
 
-        let (raw, padding, remaining_gcm_in_data) = match saved_cipher {
+        let (raw, padding) = match saved_cipher {
             SavedCipher::Encryption(..) if !Op::is_encrypt() => {
                 return Err(de::Error::invalid_value(
                     Unexpected::Other("incorrect cipher operation"),
@@ -169,10 +169,9 @@ impl<'de, Op: Operation, T: Type> Deserialize<'de> for Cipher<Op, T, CipherData>
                     &"decryption",
                 ));
             }
-            SavedCipher::Encryption(raw, padding, remaining_gcm_in_data)
-            | SavedCipher::Decryption(raw, padding, remaining_gcm_in_data)
+            SavedCipher::Encryption(raw, padding) | SavedCipher::Decryption(raw, padding)
             => {
-                (raw, padding, remaining_gcm_in_data)
+                (raw, padding)
             }
         };
 
@@ -273,7 +272,6 @@ impl<'de, Op: Operation, T: Type> Deserialize<'de> for Cipher<Op, T, CipherData>
         Ok(Cipher {
             raw_cipher: raw_cipher,
             padding: padding,
-            remaining_gcm_in_data,
             _op: PhantomData,
             _type: PhantomData,
             _state: PhantomData,
